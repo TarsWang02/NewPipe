@@ -301,6 +301,15 @@ public final class ListHelper {
 
         final Comparator<AudioStream> cmp = getAudioFormatComparator(context);
 
+        // Preserve existing track-ID grouping for services that provide track IDs. When no
+        // playable stream has an ID, use language and track type as a fallback.
+        final boolean hasKnownTrackId = audioStreams.stream().anyMatch(stream ->
+                stream.getDeliveryMethod() != DeliveryMethod.TORRENT
+                        && !(stream.getDeliveryMethod() == DeliveryMethod.HLS
+                        && stream.getFormat() == MediaFormat.OPUS)
+                        && stream.getAudioTrackId() != null
+                        && !stream.getAudioTrackId().isEmpty());
+
         for (final AudioStream stream : audioStreams) {
             if (stream.getDeliveryMethod() == DeliveryMethod.TORRENT
                     || (stream.getDeliveryMethod() == DeliveryMethod.HLS
@@ -308,7 +317,12 @@ public final class ListHelper {
                 continue;
             }
 
-            final String trackId = Objects.toString(stream.getAudioTrackId(), "");
+            String trackId = Objects.toString(stream.getAudioTrackId(), "");
+            if (!hasKnownTrackId && trackId.isEmpty() && stream.getAudioLocale() != null
+                    && !stream.getAudioLocale().getLanguage().isEmpty()) {
+                trackId = stream.getAudioLocale().toLanguageTag() + "|"
+                        + Objects.toString(stream.getAudioTrackType(), "");
+            }
 
             final AudioStream presentStream = collectedStreams.get(trackId);
             if (presentStream == null || cmp.compare(stream, presentStream) > 0) {
